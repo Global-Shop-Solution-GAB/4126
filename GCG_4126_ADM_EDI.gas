@@ -1,0 +1,532 @@
+Program.Sub.ScreenSU.Start
+gui.Form1..create
+gui.Form1..caption("Admill Machine EDI Upload")
+gui.Form1..size(6450,3045)
+gui.Form1..minx(0)
+gui.Form1..miny(0)
+gui.Form1..position(0,0)
+gui.Form1..event(unload,form1_unload)
+gui.Form1..alwaysontop(False)
+gui.Form1..fontname("Arial")
+gui.Form1..fontsize(8)
+gui.Form1..forecolor(0)
+gui.Form1..fontstyle(,,,,)
+gui.Form1..BackColor(-2147483633)
+gui.Form1..controlbox(True)
+gui.Form1..maxbutton(True)
+gui.Form1..minbutton(True)
+gui.Form1..mousepointer(0)
+gui.Form1..moveable(True)
+gui.Form1..sizeable(True)
+gui.Form1..ShowInTaskBar(True)
+gui.Form1..titlebar(True)
+gui.Form1.lblFile.create(label,"Import File",True,1935,255,1,200,200,True,0,Arial,8,-2147483633,0)
+gui.Form1.lblFile.defaultvalue("")
+gui.Form1.lblFile.controlgroup(0)
+gui.Form1.txtFile.create(textbox,"",True,5460,300,0,100,400,True,0,Arial,8,-2147483643,1)
+gui.Form1.txtFile.defaultvalue("")
+gui.Form1.txtFile.controlgroup(0)
+gui.Form1.cmdBrowser.create(button)
+gui.Form1.cmdBrowser.caption("^")
+gui.Form1.cmdBrowser.visible(True)
+gui.Form1.cmdBrowser.size(350,350)
+gui.Form1.cmdBrowser.zorder(0)
+gui.Form1.cmdBrowser.position(5700,390)
+gui.Form1.cmdBrowser.enabled(True)
+gui.Form1.cmdBrowser.fontname("Arial")
+gui.Form1.cmdBrowser.fontsize(8)
+gui.Form1.cmdBrowser.event(click,cmdbrowser_click)
+gui.Form1.cmdBrowser.defaultvalue("")
+gui.Form1.cmdBrowser.controlgroup(0)
+gui.Form1.cmdOK.create(button)
+gui.Form1.cmdOK.caption("OK")
+gui.Form1.cmdOK.visible(True)
+gui.Form1.cmdOK.size(855,375)
+gui.Form1.cmdOK.zorder(0)
+gui.Form1.cmdOK.position(200,1875)
+gui.Form1.cmdOK.enabled(True)
+gui.Form1.cmdOK.fontname("Arial")
+gui.Form1.cmdOK.fontsize(8)
+gui.Form1.cmdOK.event(click,cmdok_click)
+gui.Form1.cmdOK.defaultvalue("")
+gui.Form1.cmdOK.controlgroup(0)
+gui.Form1.lblPartFile.create(label,"Part File",True,1935,255,1,200,900,True,0,Arial,8,-2147483633,0)
+gui.Form1.lblPartFile.defaultvalue("")
+gui.Form1.lblPartFile.controlgroup(0)
+gui.Form1.txtPartFile.create(textbox,"",True,5460,300,0,100,1100,True,0,Arial,8,-2147483643,1)
+gui.Form1.txtPartFile.defaultvalue("")
+gui.Form1.txtPartFile.controlgroup(0)
+gui.Form1.cmdPartFile.create(button)
+gui.Form1.cmdPartFile.caption("^")
+gui.Form1.cmdPartFile.visible(True)
+gui.Form1.cmdPartFile.size(350,375)
+gui.Form1.cmdPartFile.zorder(0)
+gui.Form1.cmdPartFile.position(5700,1065)
+gui.Form1.cmdPartFile.enabled(True)
+gui.Form1.cmdPartFile.fontname("Arial")
+gui.Form1.cmdPartFile.fontsize(8)
+gui.Form1.cmdPartFile.event(click,cmdbrowser_click)
+gui.Form1.cmdPartFile.defaultvalue("")
+gui.Form1.cmdPartFile.controlgroup(0)
+
+
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+
+Variable.UDT.uSOLines.Define("fReqQty",Float)
+Variable.UDT.uSOLines.Define("sMaterial",String)
+Variable.UDT.uSOLines.Define("sDescription",String)
+Variable.UDT.uSOLines.Define("sSupplier",String)
+Variable.UDT.uSOLines.Define("sSRC",String)
+Variable.UDT.uSOLines.Define("sLot",String)
+Variable.UDT.uSOLines.Define("sAsBuilt",String)
+Variable.UDT.uSOLines.Define("dReqDate",Date)
+Variable.UDT.uSOLines.Define("sPO",String)
+Variable.UDT.uSOLines.Define("sDPAS",String)
+Variable.UDT.uSOLines.Define("sInspReq",String)
+Variable.UDT.uSOLines.Define("sSNR",String)
+Variable.UDT.uSOLines.Define("dCommit",Date)
+Variable.UDT.uSOLines.Define("sDeliverTo",String)
+Variable.UDT.uSOLines.Define("fPullQty",Float)
+Variable.UDT.uSOLines.Define("sComments",String)
+Variable.uGlobal.uSOLine.Declare("uSOLines")
+Variable.Global.sFileLines.Declare(String)
+Variable.Global.sPart.Declare(String)
+Variable.Global.sLineNum.Declare(String)
+Variable.Global.sHeader.Declare(String)
+
+Variable.UDT.GSSPart.Define("PO",String)
+Variable.UDT.GSSPart.Define("Export_Part",String)
+Variable.UDT.GSSPart.Define("GSS_Part",String)
+Variable.uGlobal.uGSSpart.Declare("GSSPart")
+
+Variable.Global.sPO.Declare(String)
+Variable.Global.dReqDate.Declare(Date,1/1/1900)
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Main_Err")
+F.Intrinsic.Control.ClearErrors
+'Created by SKC on 3/24/2016 for Phoenix Manufacturing
+'The user will be able to select a csv file and then an EA850 file will be created with M lines
+'This will run from a custom menu Item, and parts on the file with a sort code of SLC will not have lines created.  If a customer part xref exists then that part number will be used instead of the GSS part number.
+
+V.Global.sExportHdr.Declare(String)
+
+
+F.Intrinsic.Control.If(V.Caller.GSSVersion,<,"2015.3")
+	F.Intrinsic.UI.Msgbox("Please update to version 2015.3!","Version Error")
+	F.Intrinsic.Control.End
+
+F.Intrinsic.Control.EndIf
+
+
+V.Local.sError.Declare(String)
+
+F.ODBC.Connection!conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+
+Gui.Form1..Show
+
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Main_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_3647_PHO_EDI.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Form1_unload)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.Main.End
+
+program.sub.form1_unload.start
+F.Intrinsic.Control.SetErrorHandler("form1_unload_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+F.ODBC.Connection!conx.Close
+
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("form1_unload_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_3647_PHO_EDI.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+
+Function.Intrinsic.Control.EndIf
+
+
+program.sub.form1_unload.End
+
+program.sub.cmdok_click.start
+F.Intrinsic.Control.SetErrorHandler("cmdok_click_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+V.Local.sSavePath.Declare(String)
+'V.Static.sPO.Declare(String)
+V.Static.iCount.Declare(Long)
+V.Local.iOrd.Declare(Long)
+V.Local.fQty.Declare(Float)
+
+
+'Check to see if the Files were selected
+F.Intrinsic.Control.If(V.Screen.Form1!txtFile.Text,=,"")
+	F.Intrinsic.UI.Msgbox("Please select Import File")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.ElseIf(V.Screen.Form1!txtPartFile.Text,=,"")
+	F.Intrinsic.UI.Msgbox("Please select Part Cross Reference File")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+Function.Intrinsic.UI.InvokeWaitDialog("Reading Import Files.")
+
+Gui.Form1..Visible(False)
+
+F.Intrinsic.Control.CallSub(Partxref)
+F.Intrinsic.Control.CallSub(Importxls)
+
+
+
+'Preset the needed values.
+V.Global.sLineNum.Set("0")
+V.Global.sPO.Set(V.uGlobal.uSOLine(0)!sPO)
+V.Global.sPart.Set(V.uGlobal.uSOLine(0)!sMaterial)
+V.Global.dReqDate.Set(V.uGlobal.uSOLine(0)!dReqDate)
+F.Intrinsic.Math.Add(V.Global.sLineNum,1,V.Global.sLineNum)
+F.Intrinsic.String.LPad(V.Global.sLineNum,"0",3,V.Global.sLineNum)
+v.uGlobal.uSOLine.RedimPreserve(0,v.uGlobal.uSOLine.UBound++)
+
+F.Intrinsic.Control.For(V.Static.iCount,0,V.uGlobal.uSOLine.UBound,1)
+	'sum up Qty till the Either, Part, PO, Line num, or Req Date Change
+	F.Intrinsic.Control.If(V.Global.sPO.Trim,=,V.uGlobal.uSOLine(v.Static.iCount)!sPO.Trim)
+	F.Intrinsic.Control.AndIf(V.Global.sPart,=,V.uGlobal.uSOLine(v.Static.iCount)!sMaterial)
+	F.Intrinsic.Control.AndIf(V.Global.dReqDate,=,V.uGlobal.uSOLine(v.Static.iCount)!dReqDate)
+		F.Intrinsic.Math.Add(V.uGlobal.uSOLine(v.Static.iCount)!fReqQty,V.Local.fQty,V.Local.fQty)
+	F.Intrinsic.Control.Else
+	'	Create the EDI file
+		F.Intrinsic.Math.Sub(V.Static.iCount,1,V.Local.iOrd)
+		F.Intrinsic.Control.CallSub(Mlines,"iCount",V.Local.iOrd,"fQty",V.Local.fQty,"iCurrentCount",V.Static.iCount)
+		V.Local.fQty.Set(V.uGlobal.uSOLine(v.Static.iCount)!fReqQty)
+		V.Global.dReqDate.Set(V.uGlobal.uSOLine(v.Static.iCount)!dReqDate)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.static.iCount)
+
+'Save file to the Global\\Files Directory with a Name of EA850@@@ with @ being the Company Code
+F.Intrinsic.String.Build("{0}\EA850{1}",V.Caller.FilesDir,V.Caller.CompanyCode,V.Local.sSavePath)
+F.Intrinsic.File.String2File(V.Local.sSavePath,V.Global.sFileLines)
+
+F.Global.General.CallWrapperSync(50,"ORD040GI")
+F.Global.General.CallWrapperSync(50,"ORD045GI")
+F.Intrinsic.Control.CallSub(Form1_unload)
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("cmdok_click_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_3647_PHO_EDI.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Form1_unload)
+Function.Intrinsic.Control.EndIf
+
+
+program.sub.cmdok_click.End
+
+program.sub.cmdbrowser_click.start
+F.Intrinsic.Control.SetErrorHandler("cmdbrowser_click_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sPath.Declare(String)
+V.Local.sControl.Declare(String)
+
+F.Intrinsic.UI.ShowOpenFileDialog("","xlsx|*.xlsx",V.Caller.FilesDir,V.Local.sPath)
+	F.Intrinsic.Control.If(V.Local.sPath,!=,"***CANCEL***")
+	F.Intrinsic.Control.SelectCase(V.Args.ControlName.UCase)
+		F.Intrinsic.Control.Case("CMDBROWSER")
+			Gui.Form1.txtFile.Text(V.Local.sPath)
+		F.Intrinsic.Control.Case("CMDPARTFILE")
+			Gui.Form1.txtPartFile.Text(V.Local.sPath)
+	F.Intrinsic.Control.EndSelect
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("cmdbrowser_click_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_3647_PHO_EDI.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Form1_unload)
+Function.Intrinsic.Control.EndIf
+
+
+program.sub.cmdbrowser_click.End
+
+Program.Sub.MLines.Start
+F.Intrinsic.Control.SetErrorHandler("MLines_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sDate.Declare(String)
+V.Local.sMLine.Declare(String)
+V.Local.sQty.Declare(String)
+V.Local.sPO.Declare(String)
+V.Local.sLines.Declare(String)
+V.Static.bFlag.Declare(Boolean)
+V.Static.fQty.Declare(Float)
+V.Static.iOrd.Declare(Long)
+V.Local.iLen.Declare(Long)
+V.Static.sTotalMLine.Declare(String)
+
+'dont create the mLines if blank part
+F.Intrinsic.Control.If(V.uGlobal.uSOLine(v.Args.iCount)!sMaterial,!=,"")
+'Cust
+	F.Intrinsic.String.RPad("PWA001"," ",35,V.Local.sMLine)
+	'PO
+	F.Intrinsic.String.Split(V.uGlobal.uSOLine(v.Args.iCount)!sPO,"/",V.Local.sPO)
+'	F.Intrinsic.String.Left(V.Local.sPO(1),1,V.Local.sPO(1))
+	F.Intrinsic.String.LPad(V.Local.sPO(1),"0",3,V.Local.sPO(1))
+	F.Intrinsic.String.Build("{0}{1}",V.Local.sMLine,V.Local.sPO(0).Trim,V.Local.sMLine)
+	F.Intrinsic.String.RPad(V.Local.sMLine," ",50,V.Local.sMLine)
+	'LineNumber must match the 1 Record
+	F.Intrinsic.String.Build("{0}{1}",V.Local.sMLine,V.Global.sLineNum,V.Local.sMLine)
+	F.Intrinsic.String.RPad(V.Local.sMLine," ",66,V.Local.sMLine)
+	'running Line Qty
+	F.Intrinsic.Math.Add(V.Static.fQty,V.Args.fQty,V.Static.fQty)
+	'Format Qty
+	F.Intrinsic.String.Split(V.Args.fQty,".",V.Local.sQty)
+	V.Local.sQty.RedimPreserve(0,1)
+	F.Intrinsic.String.LPad(V.Local.sQty(0),"0",8,V.Local.sQty(0))
+	F.Intrinsic.String.RPad(V.Local.sQty(1),"0",4,V.Local.sQty(1))
+	F.Intrinsic.String.Build("{0}{1}",V.Local.sQty(0),V.Local.sQty(1),V.Local.sQty(0))
+	F.Intrinsic.String.Build("{0}{1}",V.Local.sMLine,V.Local.sQty,V.Local.sMLine)
+	F.Intrinsic.String.RPad(V.Local.sMLine," ",86,V.Local.sMLine)
+	'Fromat Date
+	F.Intrinsic.String.Format(V.uGlobal.uSOLine(v.ARGS.iCount)!dReqDate,"YYYYMMDD",V.Local.sDate)
+	'Date
+	F.Intrinsic.String.Build("{0}{1}",V.Local.sMLine,V.Local.sDate,V.Local.sMLine)
+	F.Intrinsic.String.RPad(V.Local.sMLine," ",94,V.Local.sMLine)
+
+	'Firm
+	F.Intrinsic.String.Build("{0}F",V.Local.sMLine,V.Local.sMLine)
+	F.Intrinsic.String.RPad(V.Local.sMLine," ",510,V.Local.sMLine)
+	'M record
+	F.Intrinsic.String.Build("{0}M ",V.Local.sMLine,V.Local.sMLine)
+	'Add to the M Line collection since there can be multiple
+	F.Intrinsic.String.Build("{0}{1}{2}",V.Static.sTotalMLine,V.Local.sMLine,V.Ambient.NewLine,V.Static.sTotalMLine)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.If(V.uGlobal.uSOLine(v.Args.icurrentCount)!sPO,!=,V.Global.sPO,"OR",V.uGlobal.uSOLine(v.ARGS.iCurrentCount)!sMaterial,!=,V.Global.sPart)
+	F.Intrinsic.Control.CallSub(Llines,"iOrd",V.Static.iOrd,"sTotalMLine",V.Static.sTotalMLine,"fQty",V.Static.fQty,"iCount",V.Args.iCurrentCount)
+	'create exception file
+	F.Intrinsic.Control.CallSub(Createexception)
+	
+	V.Static.bFlag.Set(False)
+	V.Static.fQty.Set(0)
+	V.Static.sTotalMLine.Set("")
+	V.Global.sPart.Set(V.uGlobal.uSOLine(v.ARGS.iCurrentCount)!sMaterial.Trim)
+	V.Global.sPO.Set(V.uGlobal.uSOLine(v.Args.iCurrentCount)!sPO)
+	F.Intrinsic.Math.Add(V.Global.sLineNum,1,V.Global.sLineNum)
+	F.Intrinsic.String.LPad(V.Global.sLineNum,"0",3,V.Global.sLineNum)
+F.Intrinsic.Control.EndIf
+
+'SetFlag
+F.Intrinsic.Control.If(V.Static.bFlag,=,False)
+	V.Static.iOrd.Set(V.ARGS.iCurrentCount)
+	V.Static.bFlag.Set(True)
+F.Intrinsic.Control.EndIf
+
+
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("MLines_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_1334_ADM_EDI.GAS",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.MLines.End
+
+Program.Sub.LLines.Start
+V.Local.sLines.Declare(String)
+V.Local.sQty.Declare(String)
+V.Local.sDate.Declare(String)
+V.Local.sPart.Declare(String)
+V.Local.sHeader.Declare(String)
+V.Static.sTempLIne.Declare(String)
+V.Local.sPo.Declare(String)
+V.Local.sCurrentPO.Declare(String)
+V.Local.iLen.Declare(Long)
+V.Local.sPOExp.Declare(string)
+
+'Cust
+F.Intrinsic.String.RPad("PWA001"," ",35,V.Local.sLines)
+'PO
+F.Intrinsic.String.Split(V.uGlobal.uSOLine(V.ARGs.iOrd)!sPO,"/",V.Local.sPO)
+F.Intrinsic.String.Split(V.uGlobal.uSOLine(v.Args.iCount)!sPO,"/",V.Local.sCurrentPO)
+'F.Intrinsic.String.Left(V.Local.sPo(1),2,V.Local.sPo(1))
+F.Intrinsic.String.LPad(V.Local.sPo(1),"0",3,V.Local.sPo(1))
+F.Intrinsic.String.Build("{0}{1}",V.Local.sLines,V.Local.sPo(0).Trim,V.Local.sLines)
+F.Intrinsic.String.RPad(V.Local.sLines," ",50,V.Local.sLines)
+
+'LineNumber must match the 1 Record, and part
+'Get Material from the GSSPart UDT
+F.Intrinsic.Variable.UDTMultiSeek(V.uGlobal.uGSSpart!PO,V.Local.sPo(0).Trim,V.uGlobal.uGSSpart!Export_Part,V.uGlobal.uSOLine(v.Args.iOrd)!sMaterial,V.Local.sPart)
+F.Intrinsic.Control.If(V.Local.sPart,!=,"")
+	F.Intrinsic.String.Split(V.Local.sPart,"*!*",V.Local.sPart)
+
+	F.Intrinsic.String.Build("{0}{1} {2}",V.Local.sLines,V.Global.sLineNum,V.uGlobal.uGSSpart(v.Local.sPart(0))!GSS_Part,V.Local.sLines)
+	F.Intrinsic.String.RPad(V.Local.sLines," ",76,V.Local.sLines)
+	'Running Qty
+	F.Intrinsic.String.Split(V.Args.fQty,".",V.Local.sQty)
+	V.Local.sQty.RedimPreserve(0,1)
+	F.Intrinsic.String.LPad(V.Local.sQty(0),"0",8,V.Local.sQty(0))
+	F.Intrinsic.String.RPad(V.Local.sQty(1),"0",4,V.Local.sQty(1))
+	F.Intrinsic.String.Build("{0}{1}",V.Local.sQty(0),V.Local.sQty(1),V.Local.sQty(0))
+	F.Intrinsic.String.Build("{0}{1}",V.Local.sLines,V.Local.sQty,V.Local.sLines)
+	F.Intrinsic.String.RPad(V.Local.sLines," ",225,V.Local.sLines)
+	'PO Line Number
+	F.Intrinsic.String.Build("{0}{1}",V.Local.sLines,V.Local.sPo(1),V.Local.sLines)
+	F.Intrinsic.String.RPad(V.Local.sLines," ",265,V.Local.sLines)
+	'Multi Qty and Date
+	F.Intrinsic.String.Format(V.uGlobal.uSOLine(v.Args.iOrd)!dReqDate,"YYYYMMDD",V.Local.sDate)
+	F.Intrinsic.String.Build("{0}Y{1}",V.Local.sLines,V.Local.sdate,V.Local.sLines)
+	F.Intrinsic.String.RPad(V.Local.sLines," ",474,V.Local.sLines)
+	'Prom Date
+	F.Intrinsic.String.Build("{0}{1}",V.Local.sLines,V.Local.sDate,V.Local.sLines)
+	F.Intrinsic.String.RPad(V.Local.sLines," ",510,V.Local.sLines)
+	'1 Line
+	F.Intrinsic.String.Build("{0}1 ",V.Local.sLines,V.Local.sLines)
+	F.Intrinsic.String.Build("{0}{2}{1}{3}",V.Static.sTempLine,V.Ambient.NewLine,V.Local.sLines,V.Args.sTotalMLine,V.Static.sTempLine)
+
+
+	'build the string for the file  this will have the Header, 1, and M records
+	F.Intrinsic.Control.If(V.Local.sCurrentPO(0),!=,V.Local.sPO(0).trim)
+		'Cust
+		F.Intrinsic.String.RPad("PWA001"," ",35,V.Local.sHeader)
+		'PO
+		F.Intrinsic.String.Build("{0}{1}",V.Local.sHeader,V.Local.sPO(0).trim,V.Local.sHeader)
+		F.Intrinsic.String.RPad(V.Local.sHeader," ",50,V.Local.sHeader)
+		F.Intrinsic.String.Build("{0}000",V.Local.sHeader,V.Local.sHeader)
+		F.Intrinsic.String.RPad(V.Local.sHeader," ",510,V.Local.sHeader)
+		F.Intrinsic.String.Build("{0}H ",V.Local.sHeader,V.Local.sHeader)
+		V.Global.sLineNum.Set("0")
+		F.Intrinsic.String.Build("{0}{2}{1}{3}",V.Global.sFileLines,V.Ambient.NewLine,V.Local.sHeader,V.Static.sTempLIne,V.Global.sFileLines)
+		V.Static.sTempLIne.Set("")
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Else
+	F.Intrinsic.String.RPad(V.Local.sPo(0)," ",20,V.Local.sPOExp)
+	
+	f.Intrinsic.Control.if(V.Global.sExportHdr,=,"")
+		f.Intrinsic.String.Build("{0}{1}{2}",V.Local.sPOExp,v.Ambient.Tab,V.uGlobal.uSOLine(v.Args.iOrd)!sMaterial,V.Global.sExportHdr)
+	f.Intrinsic.Control.Else
+		f.Intrinsic.String.Build("{0}{1}{2}{3}{4}",V.Global.sExportHdr,v.Ambient.NewLine,V.Local.sPOExp,v.Ambient.Tab,V.uGlobal.uSOLine(v.Args.iOrd)!sMaterial,V.Global.sExportHdr)
+	f.Intrinsic.Control.endif
+	
+	V.Static.sTempLIne.Set("")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+Program.Sub.LLines.End
+
+Program.Sub.PartXRef.Start
+
+V.Local.sFileElements.Declare(String)
+V.Local.sInputDataArray.Declare(String)
+
+F.Intrinsic.UI.ChangeWaitStatus("Reading Part Cross Reference File")
+
+' specify the field heading order, for loading data to the udt
+V.Local.sFileElements.Set("PO*!*Export_Part*!*GSS_Part")
+
+' read work book information; The sheet delimiter is &^&, the row delimiter is $!$, and the column delimiter is *!*
+F.Automation.MSExcel.ReadSpreadsheet(V.Screen.Form1!txtPartFile.Text,V.Local.sInputDataArray)
+
+' split out possible multi sheets
+F.Intrinsic.String.Split(V.Local.sInputDataArray,"&^&",V.Local.sInputDataArray)
+
+' put values into udt
+F.Intrinsic.Variable.LoadUDTFromString(V.uGlobal.uGSSPart,V.Local.sFileElements,V.Local.sInputDataArray(0),"$!$","*!*",False)
+
+Program.Sub.PartXRef.End
+
+Program.Sub.ImportXls.Start
+V.Local.sFile.Declare(String)
+V.Local.sElements.Declare(String)
+V.Local.sData.Declare(String)
+F.Intrinsic.UI.ChangeWaitStatus("Reading Orders File!")
+
+
+V.Local.sFile.Set(V.Screen.Form1!txtFile.Text)
+V.Local.sElements.Set("sMaterial*!*sDescription*!*sSupplier*!*sSRC*!*sLOT*!*sInspReq*!*sAsBuilt*!*dReqDate*!*fReqQty*!*sPO*!*sDPAS*!*dCommit*!*sSNR*!*sDeliverTo*!*fPullQty*!*sComments")
+
+F.Automation.MSExcel.ReadSpreadsheet(V.Local.sFile.Trim,V.Local.sData)
+F.Intrinsic.String.Split(V.Local.sData,"&^&",V.Local.sData)
+
+'F.Intrinsic.File.File2String(V.Local.sFile.Trim,V.Local.sData)
+F.Intrinsic.Variable.LoadUDTFromString(V.uGlobal.uSOLine,V.Local.sElements,V.Local.sData(0),"$!$","*!*",False)
+F.Intrinsic.Variable.UDTMultiFlag(V.uGlobal.uSOLine!sPO,"")
+F.Intrinsic.Variable.UDTMultiFlag(V.uGlobal.uSOLine!sMaterial,"Material No")
+F.Intrinsic.Variable.UDTDeleteFlagged(V.uGlobal.uSOLine)
+F.Intrinsic.Variable.UDTMultiQuickSort(V.uGlobal.uSOLine!sPO,False,V.uGlobal.uSOLine!sMaterial,False,V.uGlobal.uSOLine!dReqDate,False)
+
+Program.Sub.ImportXls.End
+
+Program.Sub.CreateException.Start
+F.Intrinsic.Control.SetErrorHandler("CreateException_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sfile.Declare(String)
+V.Local.bexists.Declare(Boolean)
+V.Local.sdate.Declare(String)
+V.Local.sdate1.Declare(String)
+V.Local.sfilename.Declare(String)
+V.Local.sfullpath.Declare(String)
+
+F.Intrinsic.Control.If(V.Global.sExportHdr,<>,"")
+
+'create Text file
+	'build the filepath
+	F.Intrinsic.String.build("{0}{1}",V.Caller.FilesDir,"\EDI Exceptions",V.Local.sfile)
+	'see if the folder exists
+	F.Intrinsic.File.Exists(V.Local.sfile,V.Local.bexists)
+	'if the file doesn't exists create it
+	F.Intrinsic.Control.If(V.Local.bexists,=,False)
+		F.Intrinsic.File.CreateDir(V.Local.sfile)
+	F.Intrinsic.Control.EndIf
+	
+	'set the date and format it
+	Function.Intrinsic.String.Format(V.Ambient.Date,"YYYYDDMM",V.Local.sdate)
+	Function.Intrinsic.String.Format(V.Ambient.Time,"HHNNSS",V.Local.sdate1)
+	F.Intrinsic.String.Build("{0} {1}",V.Local.sdate,V.Local.sdate1,V.Local.sdate)
+	'build the filename
+	F.Intrinsic.String.Build("{0_User_EDI_Except.txt",V.Local.sDate,V.Local.sfilename)
+	'build the full path
+	F.Intrinsic.String.Build("{0}\{1}",V.local.sfile,V.Local.sfilename,V.Local.sfullpath)
+	F.Intrinsic.File.String2File(V.Local.sfullpath,V.Global.sExportHdr)
+'	F.Intrinsic.UI.Msgbox("Exception File Created")
+F.Intrinsic.Control.Endif
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("CreateException_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_1334_ADM_EDI.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.CreateException.End
+
+Program.Sub.Comments.Start
+${$0$}$GCG_3647_PHO_EDI$}$SKC$}$3/21/2016
+Program.Sub.Comments.End
+
